@@ -6,7 +6,7 @@ import pandas as pd
 # 寻找5MA, 10MA, 20MA三个均线粘合，并且位于30MA上方的股票
 # 策略特点：买入后持有，不做周期调仓，只做移动止盈止损
 
-# 获取股票列表（限制数量以减少内存占用）
+# 获取股票列表
 def get_instruments_sample(max_stocks=500):
     """获取创业板股票代码列表（list_sector=2）"""
     df = dai.query("""
@@ -14,10 +14,9 @@ def get_instruments_sample(max_stocks=500):
         FROM cn_stock_bar1d a
         INNER JOIN cn_stock_basic_info b ON a.instrument = b.instrument
         WHERE a.date >= '2024-01-01' AND b.list_sector = 2
-        LIMIT 500
     """).df()
     instruments = df['instrument'].tolist()
-    print(f"获取到 {len(instruments)} 只创业板股票（限制{max_stocks}只）")
+    print(f"获取到 {len(instruments)} 只创业板股票")
     return instruments[:max_stocks]
 
 # 交易引擎：初始化函数，只执行一次
@@ -109,8 +108,12 @@ def _check_exit_signals(context, data, current_hold_instruments, dt):
 
 def _buy_new_stocks(context, data, available_slots, dt):
     """买入新股票"""
+    # 获取当前持仓，避免重复买入
+    positions = context.get_account_positions()
+    hold_instruments = set(positions.keys())
+
     # 选股：寻找均线粘合的股票
-    selected_stocks = select_ma_convergence_stocks(data, context.instruments, dt, top_n=available_slots)
+    selected_stocks = select_ma_convergence_stocks(data, context.instruments, hold_instruments, dt, top_n=available_slots)
 
     if not selected_stocks:
         return
@@ -145,17 +148,13 @@ def _buy_new_stocks(context, data, available_slots, dt):
             continue
 
 
-def select_ma_convergence_stocks(data, instruments, dt, top_n=10, convergence_threshold=0.02):
+def select_ma_convergence_stocks(data, instruments, hold_instruments, dt, top_n=10, convergence_threshold=0.02):
     """
     选股函数：寻找均线粘合且位于30MA上方的股票
     排除已持仓的股票
     """
     selected = []
     convergence_scores = []
-
-    # 获取当前持仓，避免重复买入
-    positions = data._context.get_account_positions()
-    hold_instruments = set(positions.keys())
 
     for ins in instruments:
         # 跳过已持仓的股票
@@ -218,7 +217,7 @@ instruments = get_instruments_sample(max_stocks=500)
 
 data = {
     "start_date": '2023-01-01',
-    'end_date': '2024-12-31',
+    'end_date': '2026-2-26',
     'market': 'cn_stock',
     'instruments': instruments
 }

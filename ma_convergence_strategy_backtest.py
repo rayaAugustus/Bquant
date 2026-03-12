@@ -7,15 +7,16 @@ import pandas as pd
 
 # 获取股票列表（限制数量以减少内存占用）
 def get_instruments_sample(max_stocks=500):
-    """获取A股股票代码列表（采样）"""
+    """获取创业板股票代码列表（list_sector=2）"""
     df = dai.query("""
-        SELECT DISTINCT instrument 
-        FROM cn_stock_bar1d 
-        WHERE date >= '2024-01-01'
+        SELECT DISTINCT a.instrument 
+        FROM cn_stock_bar1d a
+        INNER JOIN cn_stock_basic_info b ON a.instrument = b.instrument
+        WHERE a.date >= '2024-01-01' AND b.list_sector = 2
         LIMIT 500
     """).df()
     instruments = df['instrument'].tolist()
-    print(f"获取到 {len(instruments)} 只股票（限制{max_stocks}只）")
+    print(f"获取到 {len(instruments)} 只创业板股票（限制{max_stocks}只）")
     return instruments[:max_stocks]
 
 # 交易引擎：初始化函数，只执行一次
@@ -76,21 +77,21 @@ def handle_data(context, data):
 
 
 def _check_exit_signals(context, data, current_hold_instruments, dt):
-    """检查卖出信号：收盘价跌破30日均线则卖出"""
+    """检查卖出信号：收盘价跌破40日均线则卖出"""
     for ins in list(current_hold_instruments):
         try:
-            # 获取历史数据计算30日均线
-            close_history = data.history(ins, 'close', 30, '1d')
-            if len(close_history) < 30:
+            # 获取历史数据计算40日均线
+            close_history = data.history(ins, 'close', 40, '1d')
+            if len(close_history) < 40:
                 continue
-            
-            ma30 = close_history.mean()
+
+            ma40 = close_history.mean()
             current_close = close_history[-1]
-            
-            # 卖出条件：收盘价跌破30日均线
-            if current_close < ma30:
+
+            # 卖出条件：收盘价跌破40日均线
+            if current_close < ma40:
                 context.order_target_percent(ins, 0)
-                print(dt, f'卖出 {ins}，跌破30日均线')
+                print(dt, f'卖出 {ins}，跌破40日均线')
         except Exception:
             continue
 
@@ -168,8 +169,8 @@ def select_ma_convergence_stocks(data, instruments, dt, top_n=10, convergence_th
 instruments = get_instruments_sample(max_stocks=500)
 
 data = {
-    "start_date": '2020-01-01',  # 缩短回测区间
-    'end_date': '2024-12-31',
+    "start_date": '2023-01-01',  # 缩短回测区间
+    'end_date': '2026-2-26',
     'market': 'cn_stock',
     'instruments': instruments
 }
